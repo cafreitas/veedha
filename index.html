@@ -668,7 +668,7 @@ async function generate(){
 
 // ── REGENERAR COM ANOTAÇÕES ──
 function checkRegenBtn(){
-  var notas=document.querySelectorAll('.pq-nota');
+  var notas=Array.prototype.slice.call(document.querySelectorAll('.pq-nota'));
   var temNota=false;
   notas.forEach(function(n){if(n.value.trim())temNota=true;});
   var wrap=document.getElementById('regenWrap');
@@ -676,7 +676,7 @@ function checkRegenBtn(){
 }
 
 async function regenerate(){
-  var notas=document.querySelectorAll('.pq-nota');
+  var notas=Array.prototype.slice.call(document.querySelectorAll('.pq-nota'));
   var notasTexto=[];
   notas.forEach(function(n,i){if(n.value.trim())notasTexto.push('P'+(i+1)+': '+n.value.trim());});
   if(!notasTexto.length)return;
