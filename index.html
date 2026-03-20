@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Veedha — Gerador de Reunião Consultiva v1.7</title>
+<title>Veedha — Gerador de Reunião Consultiva v1.8</title>
 <style>
 /* ── ZERO dependências externas. Abre com duplo-clique. ── */
 :root{
@@ -267,7 +267,7 @@ input[type=range].aslider:disabled::-webkit-slider-thumb{cursor:not-allowed}
       <label class="ll2">Senha</label>
       <input class="li" type="password" id="lPass" placeholder="••••••••">
       <button class="lbtn" onclick="doLogin()">Entrar</button>
-      <div class="lnote">Plataforma de uso interno Veedha</div>
+      <div class="lnote">Plataforma de uso interno Veedha<br>Protótipo v1.8</div>
     </div>
   </div>
 </div>
@@ -279,7 +279,7 @@ input[type=range].aslider:disabled::-webkit-slider-thumb{cursor:not-allowed}
       <div class="hlogo">veedha<span>.</span></div>
       <div class="hpipe"></div>
       <div class="hsub">Assessoria Consultiva</div>
-      <div class="hver">v1.7</div>
+      <div class="hver">v1.8</div>
     </div>
     <div class="hrr">
       <div class="ntabs">
@@ -416,7 +416,7 @@ input[type=range].aslider:disabled::-webkit-slider-thumb{cursor:not-allowed}
     </div>
   </div>
 
-  <footer class="footer">veedha. Gerador de Reunião Consultiva &nbsp;·&nbsp; <strong>v1.7</strong> &nbsp;·&nbsp; Uso interno</footer>
+  <footer class="footer">veedha. Gerador de Reunião Consultiva &nbsp;·&nbsp; <strong>v1.8</strong> &nbsp;·&nbsp; Uso interno</footer>
 </div>
 
 <script>
@@ -647,7 +647,8 @@ async function generate(){
 
     setTimeout(function(){
       document.getElementById('loadingState').style.display='none';
-      renderOutput(nome,patFmt,parsed,{pat:pat,perfil:perfil,prof:prof,obj:obj,idade:idade,currentAlloc:currentAlloc});
+      window._lastMeta={nome:nome,pat:pat,perfil:perfil,prof:prof,obj:obj,idade:idade,currentAlloc:currentAlloc};
+      renderOutput(nome,patFmt,parsed,window._lastMeta);
       document.getElementById('btnGen').disabled=false;
     },300);
   }catch(e){
@@ -656,6 +657,57 @@ async function generate(){
     document.getElementById('emptyState').style.display='flex';
     document.getElementById('btnGen').disabled=false;
     alert('Erro ao chamar a IA:\n\n'+e.message+'\n\nVerifique:\n1. Chave de API válida (sk-ant-...)\n2. Conexão com internet ativa');
+  }
+}
+
+// ── REGENERAR COM ANOTAÇÕES ──
+function checkRegenBtn(){
+  var notas=document.querySelectorAll('.pq-nota');
+  var temNota=false;
+  notas.forEach(function(n){if(n.value.trim())temNota=true;});
+  var wrap=document.getElementById('regenWrap');
+  if(wrap)wrap.style.display=temNota?'block':'none';
+}
+
+async function regenerate(){
+  var notas=document.querySelectorAll('.pq-nota');
+  var notasTexto=[];
+  notas.forEach(function(n,i){if(n.value.trim())notasTexto.push('P'+(i+1)+': '+n.value.trim());});
+  if(!notasTexto.length)return;
+
+  var meta=window._lastMeta;
+  var apiKey=document.getElementById('apiKeyInput').value.trim();
+  if(!apiKey){alert('Chave de API não encontrada.');return;}
+
+  document.getElementById('btnRegen').disabled=true;
+  document.getElementById('btnRegen').textContent='Regenerando...';
+
+  var nome=meta.nome,pat=meta.pat,prof=meta.prof,idade=meta.idade,perfil=meta.perfil,obj=meta.obj;
+  var patFmt=new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL',maximumFractionDigits:0}).format(pat);
+
+  var prompt='Você é assessor sênior da Veedha Investimentos. Refine o roteiro consultivo para '+nome+' ('+prof+', '+idade+' anos, patrimônio '+patFmt+', perfil '+perfil+', objetivo: '+obj+') com base nas respostas coletadas nas perguntas de diagnóstico:\n\n'
+    +notasTexto.join('\n')
+    +'\n\nUsando essas informações concretas do cliente, regenere perguntas de diagnóstico mais aprofundadas, argumentos consultivos mais personalizados e slides mais relevantes.\n\n'
+    +'Responda SOMENTE JSON válido, sem markdown:\n'
+    +'{"resumoPerfil":"2-3 frases atualizadas","roteiro":[{"titulo":"...","descricao":"...","dica":"...","minutos":5}],"perguntas":[{"pergunta":"...","motivo":"..."}],"argumentos":[{"titulo":"...","corpo":"...","frase_gancho":"..."}],"slides":[{"numero":1,"rotulo":"Capa","titulo":"...","conteudo":"...","visual":"..."}],"alocacao":{"labels":["Pós Fixado","Inflação","Prefixado","Multimercados","Renda Variável BR","FII","Alternativos","RF Global","RV Global"],"data":[70,10,5,5,2,0,0,3,5]}}\n\n'
+    +'Gere exatamente: 6 etapas, 5 perguntas, 3 argumentos, 6 slides. Seja específico para o que o cliente revelou.';
+
+  try{
+    var resp=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:4000,messages:[{role:'user',content:prompt}]})
+    });
+    if(!resp.ok){var err=await resp.json().catch(function(){return{};});throw new Error('API '+resp.status+': '+(err.error&&err.error.message?err.error.message:resp.statusText));}
+    var d=await resp.json();
+    var raw=d.content.map(function(c){return c.text||'';}).join('');
+    var parsed=JSON.parse(raw.replace(/```json|```/g,'').trim());
+    renderOutput(nome,patFmt,parsed,meta);
+  }catch(e){
+    alert('Erro ao regenerar:\n\n'+e.message);
+  }finally{
+    var btn=document.getElementById('btnRegen');
+    if(btn){btn.disabled=false;btn.innerHTML='<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M2 7a5 5 0 1 1 1.5 3.5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M2 10.5V7h3.5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> Regenerar com anotações';}
   }
 }
 
@@ -685,8 +737,17 @@ function renderOutput(nome,patFmt,data,meta){
   // Perguntas
   var b2=mkBlock('❓','5 Perguntas de Diagnóstico',true);
   data.perguntas.forEach(function(p,i){
-    b2.body.innerHTML+='<div class="pqcard"><div class="pqn">P'+(i+1)+'</div><div><div class="pqq">"'+p.pergunta+'"</div><div class="pqwhy">→ '+p.motivo+'</div></div></div>';
+    b2.body.innerHTML+='<div class="pqcard" style="flex-direction:column;gap:6px">'
+      +'<div style="display:flex;gap:9px"><div class="pqn" style="flex-shrink:0;margin-top:1px">P'+(i+1)+'</div><div><div class="pqq">"'+p.pergunta+'"</div><div class="pqwhy">→ '+p.motivo+'</div></div></div>'
+      +'<textarea class="fta pq-nota" data-idx="'+i+'" placeholder="Anotações sobre a resposta do cliente (opcional)..." style="min-height:44px;font-size:.75rem;margin-top:2px" oninput="checkRegenBtn()"></textarea>'
+      +'</div>';
   });
+  b2.body.innerHTML+='<div id="regenWrap" style="display:none;margin-top:10px">'
+    +'<button class="genbtn" id="btnRegen" onclick="regenerate()" style="background:var(--gold);color:#1a1a1a">'
+    +'<svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M2 7a5 5 0 1 1 1.5 3.5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M2 10.5V7h3.5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+    +'Regenerar com anotações'
+    +'</button>'
+    +'</div>';
   area.appendChild(b2.el);
 
   // Argumentos
@@ -697,7 +758,7 @@ function renderOutput(nome,patFmt,data,meta){
   area.appendChild(b3.el);
 
   // Slides - design institucional
-  var b4=mkBlock('📑','Mini Apresentação — 6 slides',false);
+  var b4=mkBlock('📑','Apresentação — 6 slides',false);
   var sg=document.createElement('div');sg.className='sldeckgrid';
 
   data.slides.forEach(function(s,i){
