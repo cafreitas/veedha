@@ -633,11 +633,17 @@ async function generate(){
     });
     if(!resp.ok){
       var err=await resp.json().catch(function(){return{};});
-      throw new Error('API '+resp.status+': '+(err.error&&err.error.message?err.error.message:resp.statusText));
+      var msg=(err.error&&err.error.message?err.error.message:resp.statusText);
+      throw new Error('HTTP '+resp.status+': '+msg);
     }
     var d=await resp.json();
     var raw=d.content.map(function(c){return c.text||'';}).join('');
-    var parsed=JSON.parse(raw.replace(/```json|```/g,'').trim());
+    var parsed;
+    try{
+      parsed=JSON.parse(raw.replace(/```json|```/g,'').trim());
+    }catch(parseErr){
+      throw new Error('Resposta da IA não é JSON válido. Trecho: '+raw.substring(0,200));
+    }
 
     clearInterval(iv);
     ids.forEach(function(id){document.getElementById(id).className='ldstep done';});
@@ -676,8 +682,7 @@ async function regenerate(){
   if(!notasTexto.length)return;
 
   var meta=window._lastMeta;
-  var apiKey=document.getElementById('apiKeyInput').value.trim();
-  if(!apiKey){alert('Chave de API não encontrada.');return;}
+  if(!apiKey){alert('Sessão expirada. Faça login novamente.');return;}
 
   document.getElementById('btnRegen').disabled=true;
   document.getElementById('btnRegen').textContent='Regenerando...';
